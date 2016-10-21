@@ -1,0 +1,104 @@
+
+Configuration: 512-32-4
+Searching for the best map calibration factor...1.01
+Searching for the best reduce calibration factor...1.0
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            438.00                     672.00                   1172.00
+Simulated:         439.55                     672.00                   1153.26                     1.60%                     1.55
+
+
+
+
+
+Configuration: 512-32-8
+Searching for the best map calibration factor...0.99
+Searching for the best reduce calibration factor...1.01
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            432.00                     338.00                    833.00
+Simulated:         430.85                     339.36                    818.16                     1.78%                     2.51
+
+
+
+
+
+Configuration: 512-32-16
+Searching for the best map calibration factor...0.98
+Searching for the best reduce calibration factor...1.11
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            425.00                     187.00                    682.00
+Simulated:         426.50                     186.48                    673.42                     1.26%                     2.02
+
+
+
+
+
+Configuration: 512-64-4
+Searching for the best map calibration factor...0.96
+Searching for the best reduce calibration factor...0.99
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            833.00                     664.00                   1562.00
+Simulated:         835.58                     665.28                   1540.49                     1.38%                     3.86
+
+
+
+
+
+Configuration: 512-64-8
+Searching for the best map calibration factor...0.94
+Searching for the best reduce calibration factor...1.02
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            821.00                     342.00                   1221.00
+Simulated:         818.18                     342.72                   1207.06                     1.14%                     3.54
+
+
+
+
+
+Configuration: 512-64-16
+Searching for the best map calibration factor...0.93
+Searching for the best reduce calibration factor...1.1
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            809.00                     184.00                   1126.00
+Simulated:         809.47                     184.80                   1052.63                     6.52%                     1.27
+
+
+
+
+Configuration: 512-128-4
+Searching for the best map calibration factor...0.94
+Searching for the best reduce calibration factor...0.99
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:           1638.00                     667.00                   2237.00
+Simulated:        1636.35                     665.28                   2340.36                     4.62%                     3.37
+
+
+
+
+
+Configuration: 512-128-8
+Searching for the best map calibration factor...0.93
+Searching for the best reduce calibration factor...1.01
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:           1616.00                     338.00                   2031.00
+Simulated:        1618.94                     339.36                   2003.14                     1.37%                     4.30
+
+
+
+
+
+Configuration: 512-128-16
+Searching for the best map calibration factor...0.57
+Searching for the best reduce calibration factor...1.09
+
+		Map Phase		Reduce Phase		Execution Time		Simulation Error		Sum of Diffs
+Actual:            998.00                     183.00                   1851.00
+Simulated:         992.26                     183.12                   1232.70                    33.40%                     5.86
+
