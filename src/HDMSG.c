@@ -10,8 +10,8 @@
 
 #include "HdmsgHost.h"
 
-#include "msg/msg.h"            /* Yeah! If you want to use msg, you need to include msg/msg.h */
-#include "xbt/sysdep.h"         /* calloc, printf */
+#include "simgrid/msg.h"
+#include "xbt/sysdep.h"
 
 /* Create a log channel to have nice outputs. */
 #include "xbt/log.h"
@@ -75,15 +75,22 @@ int ready_reducers;
 /* Master Process */
 int master(int argc, char *argv[])
 {
-    int ready_processes = 0;
-    int ready_shufflers = 0;
-    
-    msg_task_t task = NULL;
-    _XBT_GNUC_UNUSED int res;
-    
     char * key;
     struct HdmsgHost *hdmsg_host;
     xbt_dict_cursor_t cursor = NULL;
+    
+    int i = 0;
+    
+    long remaining_inits = 0;
+    long remaining_mappers = 0;
+    long remaining_shufflers = 0;
+    long remaining_reducers = 0;
+    long expected_messages = 0;
+    
+    msg_comm_t res_irecv;
+    msg_task_t task_com;
+    msg_task_t *tasks = xbt_new(msg_task_t, number_of_workers);
+    xbt_dynar_t comms = xbt_dynar_new(sizeof(msg_comm_t), NULL);
     
     XBT_INFO("INITIALIZATION BEGIN");
     
@@ -93,152 +100,101 @@ int master(int argc, char *argv[])
         if (hdmsg_host->is_worker)
         {
             MSG_process_create("Init", initializeProcs, NULL, hdmsg_host->host);
-        }
-    }
-
-    // Wait for initialization to finish
-    ready_processes = 0;
-    
-    while (1)
-    {
-        res = MSG_task_receive(&(task), MSG_process_get_name(MSG_process_self()));
-        xbt_assert(res == MSG_OK, "MSG_task_get failed: Master (init)");
-        
-        if (!strcmp(MSG_task_get_name(task), "init process exiting"))
-        {
-            ready_processes++;
-        }
-        else
-        {
-            printf("*** INIT PHASE ERROR Received unexpected task: %s\n", MSG_task_get_name(task));
-        }
-        
-        MSG_task_destroy(task);
-        task = NULL;
-        
-        if (ready_processes == number_of_workers)
-        {
-            break;
+            
+            tasks[remaining_inits] = NULL;
+            res_irecv = MSG_task_irecv(&tasks[remaining_inits], "master");
+            xbt_dynar_push_as(comms, msg_comm_t, res_irecv);
+            remaining_inits++;
         }
     }
     
-    XBT_INFO("INITIALIZATION COMPLETE");
-    
-    XBT_INFO("MAP PHASE BEGIN");
-    
-    // Activate Mappers
-    xbt_dict_foreach(hosts, cursor, key, hdmsg_host)
+    while (!xbt_dynar_is_empty(comms))
     {
-        if (hdmsg_host->is_worker)
-        {
-            activate_mappers(hdmsg_host);
-        }
-    }
-    
-    ready_processes = 0;
-    
-    while (1)
-    {
-        res = MSG_task_receive(&(task), MSG_process_get_name(MSG_process_self()));
-        xbt_assert(res == MSG_OK, "MSG_task_get failed: Master (map)");
+        xbt_dynar_remove_at(comms, MSG_comm_waitany(comms), &res_irecv);
+        task_com = MSG_comm_get_task(res_irecv);
         
-        if (!strcmp(MSG_task_get_name(task), "shuffle start"))
+        if (!strcmp(MSG_task_get_name(task_com), "init_exit"))
+        {
+            msg_host_t h = MSG_task_get_source(task_com);
+            MSG_task_destroy(task_com);
+            
+            const char *host_name = MSG_host_get_name(h);
+            struct HdmsgHost *hdmsg_host = xbt_dict_get(hosts, host_name);
+            
+            remaining_mappers += get_mapper_count(hdmsg_host);
+            remaining_shufflers += get_shuffler_count(hdmsg_host);
+            remaining_reducers += get_reducer_count(hdmsg_host);
+            
+            remaining_inits--;
+            
+            if (remaining_inits == 0)
+            {
+                XBT_INFO("INITIALIZATION COMPLETE");
+                
+                // Add an extra message to account for the message sent when the shuffle phase begins
+                expected_messages = 1 + remaining_mappers + remaining_shufflers + remaining_reducers;
+                
+                free(tasks);
+                tasks = xbt_new(msg_task_t, expected_messages);
+                
+                for (i = 0; i < expected_messages; i++)
+                {
+                    tasks[i] = NULL;
+                    res_irecv = MSG_task_irecv(&tasks[i], "master");
+                    xbt_dynar_push_as(comms, msg_comm_t, res_irecv);
+                }
+                
+                XBT_INFO("MAP PHASE BEGIN");
+                
+                // Activate Mappers
+                xbt_dict_foreach(hosts, cursor, key, hdmsg_host)
+                {
+                    activate_mappers(hdmsg_host);
+                }
+            }
+        }
+        else if (!strcmp(MSG_task_get_name(task_com), "shuffle_start"))
         {
             XBT_INFO("SHUFFLE PHASE BEGIN");
         }
-        else if (!strcmp(MSG_task_get_name(task), "map process exiting"))
+        else if (!strcmp(MSG_task_get_name(task_com), "map_exit"))
         {
-            ready_processes++;
+            remaining_mappers--;
+            if (remaining_mappers == 0)
+            {
+                XBT_INFO("MAP PHASE COMPLETE");
+            }
         }
-        else if (!strcmp(MSG_task_get_name(task), "shuffle send process exiting"))
+        else if (!strcmp(MSG_task_get_name(task_com), "shuffle_exit"))
         {
-            ready_shufflers++;
+            remaining_shufflers--;
+            if (remaining_shufflers == 0)
+            {
+                XBT_INFO("SHUFFLE PHASE COMPLETE");
+                XBT_INFO("REDUCE PHASE BEGIN");
+                
+                // Activate Reducers
+                xbt_dict_foreach(hosts, cursor, key, hdmsg_host)
+                {
+                    activate_reducers(hdmsg_host);
+                }
+            }
         }
-        else
+        else if (!strcmp(MSG_task_get_name(task_com), "reduce_exit"))
         {
-            printf("*** MAP PHASE ERROR Received unexpected task: %s\n", MSG_task_get_name(task));
-        }
-        
-        MSG_task_destroy(task);
-        task = NULL;
-        
-        if (ready_processes == mappers)
-        {
-            break;
-        }
-    }
-    
-    XBT_INFO("MAP PHASE COMPLETE");
-    
-    // Wait for shuffle phase to end
-    
-    while (1)
-    {
-        res = MSG_task_receive(&(task), MSG_process_get_name(MSG_process_self()));
-        xbt_assert(res == MSG_OK, "MSG_task_get failed: Master (shuffle)");
-        
-        if (!strcmp(MSG_task_get_name(task), "shuffle send process exiting"))
-        {
-            ready_shufflers++;
-        }
-        else if (!strcmp(MSG_task_get_name(task), "shuffle start"))
-        {
-            XBT_INFO("SHUFFLE PHASE BEGIN");
+            remaining_reducers--;
+            if (remaining_reducers == 0)
+            {
+                XBT_INFO("REDUCE PHASE COMPLETE");
+            }
         }
         else
         {
-            printf("*** SHUFFLE PHASE ERROR Received unexpected task: %s\n", MSG_task_get_name(task));
-        }
-        
-        MSG_task_destroy(task);
-        task = NULL;
-        
-        if (ready_shufflers == reducers * SHUFFLERS_PER_REDUCER)
-        {
-            break;
+            printf("*** MAP PHASE ERROR Received unexpected task: %s\n", MSG_task_get_name(task_com));
         }
     }
     
-    XBT_INFO("SHUFFLE PHASE COMPLETE");
-    
-    XBT_INFO("REDUCE PHASE BEGIN");
-    
-    // Activate Reducers
-    xbt_dict_foreach(hosts, cursor, key, hdmsg_host)
-    {
-        if (hdmsg_host->is_worker)
-        {
-            activate_reducers(hdmsg_host);
-        }
-    }
-    
-    // Wait for reduce phase to end
-    ready_processes = 0;
-    
-    while (1)
-    {
-        res = MSG_task_receive(&(task), MSG_process_get_name(MSG_process_self()));
-        xbt_assert(res == MSG_OK, "MSG_task_get failed: Master (reduce)");
-        
-        if (!strcmp(MSG_task_get_name(task), "reduce process exiting"))
-        {
-            ready_processes++;
-        }
-        else
-        {
-            printf("*** REDUCE PHASE ERROR Received unexpected task: %s\n", MSG_task_get_name(task));
-        }
-        
-        MSG_task_destroy(task);
-        task = NULL;
-        
-        if (ready_processes == reducers)
-        {
-            break;
-        }
-    }
-    
-    XBT_INFO("REDUCE PHASE COMPLETE");
+    free(tasks);
     
     return 0;
 }                               /* end_of_master */
@@ -251,8 +207,8 @@ int initializeProcs(int argc, char * argv[])
     struct HdmsgHost * this_host = xbt_dict_get(hosts, host_name);
     
     int i;
-    long mappers_per_worker = MSG_host_get_core_number(this_host->host); //mappers / number_of_workers;
-    long reducers_per_worker = reducers / number_of_workers;
+    long mappers_to_launch = MSG_host_get_core_number(this_host->host);
+    long reducers_to_launch = reducers / number_of_workers;
     
     // If the number of reducers is not divisible by the number of workers,
     // allocate the remaining reducers
@@ -260,13 +216,13 @@ int initializeProcs(int argc, char * argv[])
     {
         if (this_host->host_id <= (reducers % number_of_workers))
         {
-            reducers_per_worker++;
+            reducers_to_launch++;
         }
     }
-
+    
     // Create mappers
-    mappers += mappers_per_worker;
-    for (i = 0; i < mappers_per_worker; i++)
+    mappers += mappers_to_launch;
+    for (i = 0; i < mappers_to_launch; i++)
     {
         char * mapper_name = bprintf("%s-Mapper-%d", host_name, i);
         msg_process_t mapper = MSG_process_create(mapper_name, map, NULL, this_host->host);
@@ -275,7 +231,7 @@ int initializeProcs(int argc, char * argv[])
     }
     
     // Create shufflers
-    long number_of_shufflers = SHUFFLERS_PER_REDUCER * reducers_per_worker;
+    long number_of_shufflers = SHUFFLERS_PER_REDUCER * reducers_to_launch;
     for (i = 0; i < number_of_shufflers; i++)
     {
         char * sender_name = bprintf("%s-Sender-%d", host_name, i);
@@ -284,7 +240,7 @@ int initializeProcs(int argc, char * argv[])
     }
     
     // Create reducers
-    for (i = 0; i < reducers_per_worker; i++)
+    for (i = 0; i < reducers_to_launch; i++)
     {
         char * reducer_name = bprintf("%s-Reducer", host_name);
         msg_process_t reducer = MSG_process_create(reducer_name, reduce, NULL, this_host->host);
@@ -295,8 +251,8 @@ int initializeProcs(int argc, char * argv[])
     MSG_task_execute(MSG_task_create("initialization", get_initialization_cost(this_host->host), 0, NULL));
     
     // Notify master that initialization on this host is complete
-    MSG_task_send(MSG_task_create("init process exiting", 0, 1, NULL), "master");
-
+    MSG_task_send(MSG_task_create("init_exit", 0, 1, NULL), "master");
+    
     return 0;
 }
 
@@ -323,6 +279,7 @@ int map(int argc, char * argv[])
             MSG_task_execute(map_task);
             avg_map += MSG_get_clock() - start_time;
             MSG_task_destroy(map_task);
+            //XBT_INFO("%s has finished its map task", MSG_process_get_name(MSG_process_self()));
             
             // Partition map output for shufflers to retrieve
             partition_map_task(this_host, bytes_to_shuffle);
@@ -332,7 +289,9 @@ int map(int argc, char * argv[])
     this_host->active_mappers--;
     
     // Notify master that I'm done working
-    MSG_task_send(MSG_task_create("map process exiting", 0, 1, NULL), "master");
+    msg_comm_t comm = MSG_task_isend(MSG_task_create("map_exit", 0, 1, NULL), "master");
+    MSG_comm_wait(comm, -1);
+    MSG_comm_destroy(comm);
     
     return 0;
 }
@@ -344,7 +303,6 @@ int shuffleSend(int argc, char * argv[])
     double start_time;
     
     msg_task_t task = NULL;
-    _XBT_GNUC_UNUSED int res;
     
     const char * process_name = MSG_process_get_name(MSG_process_self());
     
@@ -361,7 +319,7 @@ int shuffleSend(int argc, char * argv[])
             if (!shuffle_started)
             {
                 shuffle_started = 1;
-                MSG_task_dsend(MSG_task_create("shuffle start", 0, 1, NULL), "master", NULL);
+                MSG_task_dsend(MSG_task_create("shuffle_start", 0, 1, NULL), "master", NULL);
             }
             
             // Create a shuffle receiver on the recipient host
@@ -390,7 +348,10 @@ int shuffleSend(int argc, char * argv[])
         }
     }
     
-    MSG_task_send(MSG_task_create("shuffle send process exiting", 0, 1, NULL), "master");
+    // Notify master that I'm done working
+    msg_comm_t comm = MSG_task_isend(MSG_task_create("shuffle_exit", 0, 1, NULL), "master");
+    MSG_comm_wait(comm, -1);
+    MSG_comm_destroy(comm);
     
     return 0;
 }
@@ -399,16 +360,15 @@ int shuffleSend(int argc, char * argv[])
 /** Shuffle Receive Process */
 int shuffleReceive(int argc, char * argv[])
 {
+    int res;
     msg_task_t task = NULL;
-    _XBT_GNUC_UNUSED int res;
     
     res = MSG_task_receive(&(task), MSG_process_get_name(MSG_process_self()));
     xbt_assert(res == MSG_OK, "MSG_task_get failed: Shuffle Receive");
     MSG_task_destroy(task);
-
+    
     return 0;
 }
-
 
 /** Reduce Process */
 int reduce(int argc, char * argv[])
@@ -421,8 +381,11 @@ int reduce(int argc, char * argv[])
     start_time = MSG_get_clock();
     MSG_task_execute(MSG_task_create("reduce", get_reduce_cost(MSG_host_self()), 0, NULL));
     avg_reduce += MSG_get_clock() - start_time;
-
-    MSG_task_send(MSG_task_create("reduce process exiting", 0, 1, NULL), "master");
+    
+    // Notify the master that I'm done working
+    msg_comm_t comm = MSG_task_isend(MSG_task_create("reduce_exit", 0, 1, NULL), "master");
+    MSG_comm_wait(comm, -1);
+    MSG_comm_destroy(comm);
     
     return 0;
 }
@@ -433,7 +396,6 @@ int main(int argc, char *argv[])
     int i, BYTES_PER_MEGABYTE = 1048576;
     
     msg_error_t res = MSG_OK;
-    
     MSG_init(&argc, argv);
     
     if (argc != 3)
@@ -446,7 +408,7 @@ int main(int argc, char *argv[])
     // Set calibration factors
     sscanf(argv[1], "%lf", &MAP_CALIBRATION_FACTOR);
     sscanf(argv[2], "%lf", &REDUCE_CALIBRATION_FACTOR);
-
+    
     // Register the functions
     MSG_function_register("master", master);
     MSG_function_register("initializeProcs", initializeProcs);
@@ -456,7 +418,7 @@ int main(int argc, char *argv[])
     
     MSG_function_register("shuffleSend", shuffleSend);
     MSG_function_register("shuffleReceive", shuffleReceive);
-
+    
     // Read config file and set parameters
     FILE * config_file = fopen("config", "r");
     
@@ -550,7 +512,10 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(key, "mappers") == 0)
             {
-                mappers = atoi(value);
+                if (isdigit(*value))
+                {
+                    mappers = atoi(value);
+                }
             }
             else if (strcmp(key, "reducers") == 0)
             {
@@ -558,21 +523,22 @@ int main(int argc, char *argv[])
                 {
                     reducers = atoi(value);
                 }
-                else
-                {
-                    // evaluate expression
-                    
-                }
             }
             else if (strcmp(key, "input_size_in_mb") == 0)
             {
-                input_size = atol(value);
-                input_size_bytes = input_size * BYTES_PER_MEGABYTE;
+                if (isdigit(*value))
+                {
+                    input_size = atol(value);
+                    input_size_bytes = input_size * BYTES_PER_MEGABYTE;
+                }
             }
             else if (strcmp(key, "hdfs_chunk_size_in_mb") == 0)
             {
-                hdfs_chunk_size = atoi(value);
-                hdfs_chunk_size_bytes = hdfs_chunk_size * BYTES_PER_MEGABYTE;
+                if (isdigit(*value))
+                {
+                    hdfs_chunk_size = atoi(value);
+                    hdfs_chunk_size_bytes = hdfs_chunk_size * BYTES_PER_MEGABYTE;
+                }
             }
             else if (strcmp(key, "platform") == 0)
             {
@@ -719,7 +685,7 @@ int main(int argc, char *argv[])
             actual_reduce,
             simulation_time,
             actual_exec);
-            
+    
     fclose(output_file);
     
     // Write results to the console
@@ -735,8 +701,8 @@ int main(int argc, char *argv[])
 
 double get_initialization_cost(msg_host_t h)
 {
-    double INIT_CALIBRATION_FACTOR = 30;
-    return INIT_CALIBRATION_FACTOR * MSG_get_host_speed(h);
+    double INIT_CALIBRATION_FACTOR = 35;
+    return INIT_CALIBRATION_FACTOR * MSG_host_get_speed(h);
 }
 
 /*
@@ -745,7 +711,7 @@ double get_initialization_cost(msg_host_t h)
 double get_map_cost(msg_host_t h)
 {
     double flops_per_mb = 13.6;
-    return MAP_CALIBRATION_FACTOR * hdfs_chunk_size * flops_per_mb * MSG_get_host_speed(h);
+    return MAP_CALIBRATION_FACTOR * hdfs_chunk_size * flops_per_mb * MSG_host_get_speed(h);
 }
 
 double get_bytes_to_shuffle()
@@ -756,7 +722,7 @@ double get_bytes_to_shuffle()
 double get_reduce_cost(msg_host_t h)
 {
     double flops_per_mb = 5.25;
-    return REDUCE_CALIBRATION_FACTOR * (input_size / reducers) * flops_per_mb * MSG_get_host_speed(h);
+    return REDUCE_CALIBRATION_FACTOR * (input_size / reducers) * flops_per_mb * MSG_host_get_speed(h);
 }
 
 
