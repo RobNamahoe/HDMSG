@@ -665,6 +665,7 @@ int main(int argc, char *argv[])
     double actual_map = mapTimes[iX][iY][iZ];
     double actual_reduce = reduceTimes[iX][iY][iZ];
     double sum_of_diffs = fabs(avg_map - actual_map) + fabs(avg_reduce - actual_reduce);
+    double diff_sum_err = (sum_of_diffs / actual_exec) * 100;
     
     double actual_exec = actualTimes[iX][iY][iZ];
     double sim_err = (fabs(simulation_time - actual_exec) / actual_exec) * 100;
@@ -674,9 +675,7 @@ int main(int argc, char *argv[])
     FILE * output_file = NULL;
     output_file = fopen("HDMSG_output.txt", "a");
     
-    fprintf(output_file, "%.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n",
-            sum_of_diffs,
-            sim_err,
+    fprintf(output_file, "%.2f%% %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n",
             MAP_CALIBRATION_FACTOR,
             REDUCE_CALIBRATION_FACTOR,
             avg_map,
@@ -684,14 +683,17 @@ int main(int argc, char *argv[])
             avg_reduce,
             actual_reduce,
             simulation_time,
-            actual_exec);
+            actual_exec,
+            sim_err,
+            sum_of_diffs,
+            diff_sum_err);
     
     fclose(output_file);
     
     // Write results to the console
     printf("\n\t\tMap Phase\t\tReduce Phase\t\tExecution Time\t\tSimulation Error\t\tSum of Diffs\n");
     printf("Actual: %17.2f %26.2f %25.2f\n", actual_map, actual_reduce, actual_exec);
-    printf("Simulated: %14.2f %26.2f %25.2f %24.2f%% %24.2f\n\n", avg_map, avg_reduce, simulation_time, sim_err, sum_of_diffs);
+    printf("Simulated: %14.2f %26.2f %25.2f %24.2f%% %24.2f (%.2f%%)\n\n", avg_map, avg_reduce, simulation_time, sim_err, sum_of_diffs, diff_sum_err);
     
     return (res == MSG_OK) ? 0 : 1;
     

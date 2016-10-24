@@ -1,11 +1,11 @@
 master node0
 
-worker node1-node32
+worker node1-node4
 
 mappers 0   # total number of mappers. If 0, each host gets 1 mapper per core
-reducers 128  # total number of reducers
+reducers 4  # total number of reducers
 
-input_size_in_mb 10240
-hdfs_chunk_size_in_mb 128
+input_size_in_mb 512
+hdfs_chunk_size_in_mb 32
 
 platform picluster.xml

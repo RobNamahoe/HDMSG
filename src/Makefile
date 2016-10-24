@@ -14,12 +14,12 @@ CFLAGA = S
 
 # define any directories containing header files other than /usr/include
 #
-INCLUDES = -Iinclude -I/usr/local/Cellar/simgrid/3.11.1/include
+INCLUDES = -Iinclude -I/usr/local/simgrid/3.13/include
 
 # define library paths in addition to /usr/lib
 #   if I wanted to include libraries not in /usr/lib I'd specify
 #   their path using -Lpath, something like:
-LFLAGS = -L/usr/local/Cellar/simgrid/3.11.1/lib
+LFLAGS = -L/usr/local/simgrid/3.13/lib
 
 # define any libraries to link into executable:
 #   if I want to link in libraries (libx.so or libx.a) I use the -llibname

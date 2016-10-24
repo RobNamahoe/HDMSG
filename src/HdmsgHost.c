@@ -34,7 +34,22 @@ struct HdmsgHost *newHdmsgHost(int host_id, msg_host_t msg_host, char * attribut
     return this_host;
 }
 
-void add_map_task(struct HdmsgHost * this_host, double compute_cost)
+int get_mapper_count(struct HdmsgHost *this_host)
+{
+    return xbt_fifo_size(this_host->mappers);
+}
+
+int get_shuffler_count(struct HdmsgHost *this_host)
+{
+    return xbt_fifo_size(this_host->shuffle_senders);
+}
+
+int get_reducer_count(struct HdmsgHost *this_host)
+{
+    return xbt_fifo_size(this_host->reducers);
+}
+
+void add_map_task(struct HdmsgHost *this_host, double compute_cost)
 {
     msg_task_t map_task = MSG_task_create("map", compute_cost, 0, NULL);
     xbt_fifo_push(this_host->map_tasks, map_task);
@@ -77,8 +92,6 @@ void activate_mappers(struct HdmsgHost *this_host)
     return;
 }
 
-
-
 void activate_reducers(struct HdmsgHost *this_host)
 {
     xbt_fifo_item_t bucket;
@@ -91,7 +104,6 @@ void activate_reducers(struct HdmsgHost *this_host)
     
     return;
 }
-
 
 void destroyHdmsgHost(struct HdmsgHost *this_host)
 {

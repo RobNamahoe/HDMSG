@@ -10,7 +10,7 @@
 #define HDMSGHOST_H
 
 #include <stdio.h>
-#include "msg/msg.h"  
+#include "simgrid/msg.h"
 
 //////////////////////
 // Constants
@@ -32,7 +32,7 @@ struct HdmsgHost
     int host_id;
     int is_master;
     int is_worker;
- 
+    
     int active_mappers;
     
     xbt_fifo_t map_tasks;
@@ -47,7 +47,7 @@ struct HdmsgHost
     xbt_fifo_t reducers;    // = reducers_per_worker
     
     xbt_fifo_t shuffle_senders;
-
+    
 };
 
 
@@ -55,10 +55,16 @@ struct HdmsgHost
 // Prototypes
 //////////////////////
 struct HdmsgHost *newHdmsgHost(int, msg_host_t, char *);
+
+int get_mapper_count(struct HdmsgHost *);
+int get_shuffler_count(struct HdmsgHost *);
+int get_reducer_count(struct HdmsgHost *);
+
 void add_map_task(struct HdmsgHost *, double);
 void partition_map_task(struct HdmsgHost *, double);
 void activate_mappers(struct HdmsgHost*);
 void activate_reducers(struct HdmsgHost *);
+
 void destroyHdmsgHost(struct HdmsgHost *);
 
 #endif /* HdmsgHost_h */
