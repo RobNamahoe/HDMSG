@@ -17,9 +17,7 @@
 #include "xbt/log.h"
 #include "xbt/asserts.h"
 
-//e_xbt_log_priority_t msgMrCatPriority = xbt_log_priority_critical;
-e_xbt_log_priority_t msgMrCatPriority = xbt_log_priority_info;
-XBT_LOG_NEW_DEFAULT_CATEGORY(msgMrCat, "Messages specific for this msg application");
+XBT_LOG_NEW_DEFAULT_CATEGORY(hdmsgCat, "Messages specific for this msg application");
 
 /* Prototypes */
 double get_initialization_cost(msg_host_t);
@@ -60,10 +58,8 @@ long input_size_bytes;
 long hdfs_chunk_size;
 long hdfs_chunk_size_bytes;
 
-double avg_map;
-double avg_shuffle;
-double number_shufflers;
-double avg_reduce;
+double sim_map;
+double sim_reduce;
 
 int shuffle_started;
 
@@ -274,12 +270,12 @@ int map(int argc, char * argv[])
         
         if (map_task != NULL)
         {
-            //XBT_INFO("%s is starting a map task", MSG_process_get_name(MSG_process_self()));
+            XBT_INFO("%s is starting a map task", MSG_process_get_name(MSG_process_self()));
             start_time = MSG_get_clock();
             MSG_task_execute(map_task);
-            avg_map += MSG_get_clock() - start_time;
+            sim_map += MSG_get_clock() - start_time;
             MSG_task_destroy(map_task);
-            //XBT_INFO("%s has finished its map task", MSG_process_get_name(MSG_process_self()));
+            XBT_INFO("%s has completed a map task", MSG_process_get_name(MSG_process_self()));
             
             // Partition map output for shufflers to retrieve
             partition_map_task(this_host, bytes_to_shuffle);
@@ -300,8 +296,6 @@ int map(int argc, char * argv[])
 /** Shuffle Send Process */
 int shuffleSend(int argc, char * argv[])
 {
-    double start_time;
-    
     msg_task_t task = NULL;
     
     const char * process_name = MSG_process_get_name(MSG_process_self());
@@ -328,10 +322,9 @@ int shuffleSend(int argc, char * argv[])
             MSG_process_create(receiver_name, shuffleReceive, NULL, recipient_host);
             
             // Send the task to the shuffle receiver
-            start_time = MSG_get_clock();
+            XBT_INFO("%s is starting a shuffle task", MSG_process_get_name(MSG_process_self()));
             MSG_task_send(task, receiver_name);
-            avg_shuffle += MSG_get_clock() - start_time;
-            number_shufflers++;
+            XBT_INFO("%s has completed a shuffle task", MSG_process_get_name(MSG_process_self()));
         }
         else
         {
@@ -378,9 +371,11 @@ int reduce(int argc, char * argv[])
     // Wait for the reduce phase to begin
     MSG_process_suspend(MSG_process_self());
     
+    XBT_INFO("%s is starting a reduce task", MSG_process_get_name(MSG_process_self()));
     start_time = MSG_get_clock();
     MSG_task_execute(MSG_task_create("reduce", get_reduce_cost(MSG_host_self()), 0, NULL));
-    avg_reduce += MSG_get_clock() - start_time;
+    sim_reduce += MSG_get_clock() - start_time;
+    XBT_INFO("%s has completed a reduce task", MSG_process_get_name(MSG_process_self()));
     
     // Notify the master that I'm done working
     msg_comm_t comm = MSG_task_isend(MSG_task_create("reduce_exit", 0, 1, NULL), "master");
@@ -394,20 +389,29 @@ int reduce(int argc, char * argv[])
 int main(int argc, char *argv[])
 {
     int i, BYTES_PER_MEGABYTE = 1048576;
+    char *config_path;
+    char *platform_path;
     
     msg_error_t res = MSG_OK;
     MSG_init(&argc, argv);
     
-    if (argc != 3)
+    if (argc != 5)
     {
-        printf("Usage: %s map_cf reduce_cf\n", argv[0]);
-        printf("Example: %s 0.28 0.29\n", argv[0]);
+        printf("Usage: %s map_cf reduce_cf config platform.xml\n", argv[0]);
+        printf("Example: %s 0.28 0.29 path_to_config path_to_platform.xml \n", argv[0]);
         exit(1);
     }
     
     // Set calibration factors
     sscanf(argv[1], "%lf", &MAP_CALIBRATION_FACTOR);
     sscanf(argv[2], "%lf", &REDUCE_CALIBRATION_FACTOR);
+    
+    // Set file paths
+    config_path = malloc(strlen(argv[3]) * sizeof(char));
+    strcpy(config_path, argv[3]);
+    
+    platform_path = malloc(strlen(argv[4]) * sizeof(char));
+    strcpy(platform_path, argv[4]);
     
     // Register the functions
     MSG_function_register("master", master);
@@ -419,8 +423,11 @@ int main(int argc, char *argv[])
     MSG_function_register("shuffleSend", shuffleSend);
     MSG_function_register("shuffleReceive", shuffleReceive);
     
+    // Create the environment
+    MSG_create_environment(platform_path);
+    
     // Read config file and set parameters
-    FILE * config_file = fopen("config", "r");
+    FILE * config_file = fopen(config_path, "r");
     
     if (config_file == NULL)
     {
@@ -540,10 +547,6 @@ int main(int argc, char *argv[])
                     hdfs_chunk_size_bytes = hdfs_chunk_size * BYTES_PER_MEGABYTE;
                 }
             }
-            else if (strcmp(key, "platform") == 0)
-            {
-                MSG_create_environment(value);
-            }
             
             // Freeing 'key' works since 'key' will always point to the address returned by
             // malloc whereas the value of line_cpy changes as a result of the call to strsep.
@@ -607,8 +610,8 @@ int main(int argc, char *argv[])
     double simulation_time = MSG_get_clock();
     XBT_INFO("Simulation time %g", simulation_time);
     
-    avg_map /= input_size_bytes / hdfs_chunk_size_bytes;;
-    avg_reduce /= reducers;
+    sim_map /= (input_size_bytes / hdfs_chunk_size_bytes); // (input_size_bytes / hdfs_chunk_size_bytes) = number of map tasks
+    sim_reduce /= reducers;
     
     int iX, iY, iZ;
     iX = log2(input_size) - 8;
@@ -619,6 +622,20 @@ int main(int argc, char *argv[])
     if (iX >= 3 || iY >= 3 || iZ >= 3) { return (res == MSG_OK) ? 0 : 1; }
     
     double mapTimes[3][3][3];  // Input size (256, 512, 1024), Chunk size (32, 64, 128), Number of reducers (4, 8, 16)
+    
+    /*  256  */
+    mapTimes[0][0][0] = 399; // 256-32-4
+    mapTimes[0][0][1] = 391;  // 256-32-8
+    mapTimes[0][0][2] = 385;  // 256-32-16
+    
+    mapTimes[0][1][0] = 830; // 256-64-4
+    mapTimes[0][1][1] = 815;  // 256-64-8
+    mapTimes[0][1][2] = 801;  // 256-64-16
+    
+    /*  512 */
+    mapTimes[0][0][0] = 399; // 256-32-4
+    mapTimes[0][0][1] = 391;  // 256-32-8
+    mapTimes[0][0][2] = 385;  // 256-32-16
     
     mapTimes[1][0][0] = 438; // 512-32-4
     mapTimes[1][0][1] = 432;  // 512-32-8
@@ -635,6 +652,20 @@ int main(int argc, char *argv[])
     
     double reduceTimes[3][3][3];
     
+    /*  256  */
+    reduceTimes[0][0][0] = 334; // 256-32-4
+    reduceTimes[0][0][1] = 168;  // 256-32-8
+    reduceTimes[0][0][2] = 91;  // 256-32-16
+    
+    reduceTimes[0][1][0] = 334; // 256-64-4
+    reduceTimes[0][1][1] = 171;  // 256-64-8
+    reduceTimes[0][1][2] = 90;  // 256-64-16
+    
+    /*  512 */
+    reduceTimes[0][0][0] = 334; // 256-32-4
+    reduceTimes[0][0][1] = 168;  // 256-32-8
+    reduceTimes[0][0][2] = 91;  // 256-32-16
+    
     reduceTimes[1][0][0] = 672; // 512-32-4
     reduceTimes[1][0][1] = 338;  // 512-32-8
     reduceTimes[1][0][2] = 187;  // 512-32-16
@@ -650,6 +681,20 @@ int main(int argc, char *argv[])
     
     double actualTimes[3][3][3];
     
+    /*  256  */
+    actualTimes[0][0][0] = 773; // 256-32-4
+    actualTimes[0][0][1] = 600;  // 256-32-8
+    actualTimes[0][0][2] = 527;  // 256-32-16
+    
+    actualTimes[0][1][0] = 1216; // 256-64-4
+    actualTimes[0][1][1] = 1035;  // 256-64-8
+    actualTimes[0][1][2] = 947;  // 256-64-16
+    
+    /*  512 */
+    actualTimes[0][0][0] = 773; // 256-32-4
+    actualTimes[0][0][1] = 600;  // 256-32-8
+    actualTimes[0][0][2] = 527;  // 256-32-16
+    
     actualTimes[1][0][0] = 1172; // 512-32-4
     actualTimes[1][0][1] = 833;  // 512-32-8
     actualTimes[1][0][2] = 682;  // 512-32-16
@@ -664,36 +709,36 @@ int main(int argc, char *argv[])
     
     double actual_map = mapTimes[iX][iY][iZ];
     double actual_reduce = reduceTimes[iX][iY][iZ];
-    double sum_of_diffs = fabs(avg_map - actual_map) + fabs(avg_reduce - actual_reduce);
-    double diff_sum_err = (sum_of_diffs / actual_exec) * 100;
-    
     double actual_exec = actualTimes[iX][iY][iZ];
+    
+    double sum_of_diffs = 100 * fabs(sim_map - actual_map)/actual_map + 100 * fabs(sim_reduce - actual_reduce)/actual_reduce;
+    double avg_percent_diff = sum_of_diffs / 2;
+    
     double sim_err = (fabs(simulation_time - actual_exec) / actual_exec) * 100;
     
     // Write results to file
-    
     FILE * output_file = NULL;
     output_file = fopen("HDMSG_output.txt", "a");
     
-    fprintf(output_file, "%.2f%% %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n",
+    fprintf(output_file, "%.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n",
             MAP_CALIBRATION_FACTOR,
             REDUCE_CALIBRATION_FACTOR,
-            avg_map,
+            sim_map,
             actual_map,
-            avg_reduce,
+            sim_reduce,
             actual_reduce,
             simulation_time,
             actual_exec,
             sim_err,
             sum_of_diffs,
-            diff_sum_err);
+            avg_percent_diff);
     
     fclose(output_file);
     
     // Write results to the console
-    printf("\n\t\tMap Phase\t\tReduce Phase\t\tExecution Time\t\tSimulation Error\t\tSum of Diffs\n");
+    printf("\n\t\tMap Phase\t\tReduce Phase\t\tExecution Time\t\tSimulation Error\t\tAvg Percent Diff\n");
     printf("Actual: %17.2f %26.2f %25.2f\n", actual_map, actual_reduce, actual_exec);
-    printf("Simulated: %14.2f %26.2f %25.2f %24.2f%% %24.2f (%.2f%%)\n\n", avg_map, avg_reduce, simulation_time, sim_err, sum_of_diffs, diff_sum_err);
+    printf("Simulated: %14.2f %26.2f %25.2f %24.2f%% %24.2f%%\n\n", sim_map, sim_reduce, simulation_time, sim_err, avg_percent_diff);
     
     return (res == MSG_OK) ? 0 : 1;
     
@@ -747,6 +792,7 @@ void distributeHdfsChunks()
             }
         }
     }
+    
 }
 
 double Log2(double n)

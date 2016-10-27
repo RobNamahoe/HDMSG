@@ -17,7 +17,7 @@ class ExpResult:
         self.actual_elap = values[7]
         self.sim_err = float(values[8])
         self.sum_of_diffs = float(values[9]) # cast these to floats since they are used to sort the list
-        self.diff_sum_err = float(values[10])
+        self.percent_diff = float(values[10])
 
         self.cfs = self.map_cf + ' , ' + self.reduce_cf
         self.map_stats = self.sim_map + ' , ' + self.actual_map
@@ -35,11 +35,25 @@ def execute(command):
     output = process.communicate()
     exitCode = process.returncode
 
+
+# Read the config file
+with open('config', 'r') as f:
+    for line in f.readlines():
+        if "reducers" in line:
+            reducers = int(line.split()[1])
+        elif "input_size_in_mb" in line:
+            input_size = int(line.split()[1])
+        elif "hdfs_chunk_size_in_mb" in line:
+            chunk_size = int(line.split()[1])
+
+config =  str(input_size) + "-" + str(chunk_size) + "-" + str(reducers)
+
+
 if os.path.isfile('HDMSG_output.txt'):
     os.remove('HDMSG_output.txt')
 
 with open('HDMSG_output.txt', "w") as f:
-    f.write("sum_of_diffs, sim_err, map_cf, reduce_cf, sim_map, actual_map, sim_redu, actual_redu, sim_elap, actual_elap\n");
+    f.write("map_cf reduce_cf sim_map actual_map sim_reduce actual_reduce sim_elap actual_elap sim_err sum_of_diffs avg_percent_diff\n");
 
 if os.path.isfile('ranked_output.txt'):
     os.remove('ranked_output.txt')
@@ -78,7 +92,7 @@ for product in products:
             sys.stdout.flush()
             progress += 10
     
-    command = "./HDMSG " + str(product[0]) + " " + str(product[1]) + "\n"
+    command = "./HDMSG " + str(product[0]) + " " + str(product[1]) + " config picluster.xml\n"
     p = subprocess.Popen(command, shell=True, stdout=fnull, stderr=fnull)
     procs.append(p)
 
@@ -99,42 +113,25 @@ with open('HDMSG_output.txt', 'r') as f:
     for line in f:
         command = line.rstrip()
         if not "map_cf" in command:
-            results.append(ExpResult(command))
-
-
-print "\nRanking by the Sum of Differences..."
-
-filename = "Ranked by Sum of Diff.txt"
-if os.path.isfile(filename):
-    os.remove(filename)
-
-fout = open(filename, 'a')
-fout.write("Exhaustive search results ordered by lowest SUM OF DIFFERENCES AS PERCENTAGE OF MEASURED EXECUTION TIME (sum_of_diffs / actual_exec)\n\n");
-fout.write("sum_of_diff(%)      sim_err(%)     map_cf, reduce_cf     sim_map , actual_map    sim_redu , actual_redu      sim_elap , actual_elap  sum_of_diff\n");
-
-for r in sorted(results, key=lambda x: x.diff_sum_err):
-    new_stats = list(r.stats)
-    new_stats.insert(0, r.sim_err)
-    new_stats.insert(0, r.diff_sum_err)
-    fout.write('{:>8} {:>17} {:>21} {:>24} {:>25} {:>28} {:>10}\n'.format(*new_stats))
-    del new_stats[:]
-
-fout.close()
+            r = ExpResult(command)
+            if r.sim_err < 1:
+                results.append(r)
 
 
 print "Ranking by the Simulation Error..."
 
-filename = "Ranked by Simulation Error.txt"
+new_result = filter(lambda x: x.sim_err < 1 == True, results)
+
+filename = config + ".txt"
 if os.path.isfile(filename):
     os.remove(filename)
 
 fout = open(filename, 'a')
-fout.write("Exhaustive search results ordered by SIMULATION ERROR (simulation_time - actual_exec) / actual_exec)\n\n");
-fout.write("sim_err(%)      sum_of_diff(%)         map_cf, reduce_cf     sim_map , actual_map    sim_redu , actual_redu      sim_elap , actual_elap  sum_of_diff\n");
+fout.write("sim_err(%)      percent_diff         map_cf, reduce_cf     sim_map , actual_map    sim_redu , actual_redu      sim_elap , actual_elap  sum_of_diff\n");
 
-for r in sorted(results, key=lambda x: x.sim_err):
+for r in sorted(results, key=lambda x: x.percent_diff):
     new_stats = list(r.stats)
-    new_stats.insert(0, r.diff_sum_err)
+    new_stats.insert(0, r.percent_diff)
     new_stats.insert(0, r.sim_err)
     fout.write('{:>7} {:>15} {:>29} {:>24} {:>24} {:>28} {:>11}\n'.format(*new_stats))
     del new_stats[:]

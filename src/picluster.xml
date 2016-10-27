@@ -2,6 +2,6 @@
 <!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">
 <platform version="4">
 <AS id="AS0" routing="Full">
-<cluster id="cluster" prefix="node" suffix="" radical="0-4" speed="92000000flops" core="4" bw="90MBps" lat="75ms"/>
+<cluster id="cluster" prefix="host" suffix="" radical="0-4" speed="92000000flops" core="4" bw="90MBps" lat="75ms"/>
 </AS>
 </platform>

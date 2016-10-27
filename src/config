@@ -1,6 +1,6 @@
-master node0
+master host0
 
-worker node1-node4
+worker host1-host4
 
 mappers 0   # total number of mappers. If 0, each host gets 1 mapper per core
 reducers 4  # total number of reducers
