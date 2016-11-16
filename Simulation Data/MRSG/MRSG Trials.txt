@@ -1,0 +1,50 @@
+map output is chunk size / reducers
+
+512-32-4
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 511.293000] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 1206.027000] [msg_test/INFO] REDUCE PHASE DONE
+
+512-32-8
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 517.147500] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 878.175000] [msg_test/INFO] REDUCE PHASE DONE
+
+512-32-16
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 524.953500] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 743.521500] [msg_test/INFO] REDUCE PHASE DONE
+
+512-64-4
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 917.205000] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 1615.842000] [msg_test/INFO] REDUCE PHASE DONE
+
+512-64-8
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 925.011000] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 1293.844500] [msg_test/INFO] REDUCE PHASE DONE
+
+512-64-16
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 925.011000] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 1159.191000] [msg_test/INFO] REDUCE PHASE DONE
+
+512-128-4
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 1773.913500] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 2480.356500] [msg_test/INFO] REDUCE PHASE DONE
+
+
+512-128-8
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 1775.865000] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 2158.359000] [msg_test/INFO] REDUCE PHASE DONE
+
+
+512-128-16
+[host0:master:(1) 0.000000] [msg_test/INFO] JOB BEGIN
+[host0:master:(1) 1775.865000] [msg_test/INFO] MAP PHASE DONE
+[host0:master:(1) 2021.754000] [msg_test/INFO] REDUCE PHASE DONE
+
+
