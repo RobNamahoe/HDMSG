@@ -14,7 +14,7 @@ Build Instructions
 
 Running HDMSG
 -------------
-The simulation accepts four command line arguments:
+The simulation accepts four command line arguments:<br>
 1. Map Calibration Factor <br>
 2. Reduce Calibration Factor <br>
 3. MapReduce job configuration file <br>
