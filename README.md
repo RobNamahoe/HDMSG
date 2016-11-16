@@ -15,10 +15,10 @@ Build Instructions
 Running HDMSG
 -------------
 The simulation accepts four command line arguments:
-1. Map Calibration Factor
-2. Reduce Calibration Factor
-3. MapReduce job configuration file
-4. SimGrid platform file
+1. Map Calibration Factor <br>
+2. Reduce Calibration Factor <br>
+3. MapReduce job configuration file <br>
+4. SimGrid platform file <br>
 
 Calibration factors are necessary to recoup the computation and communication costs lost due to the simulation being an abstraction of the target system.
 The MapReduce job configuration file defines the master and worker nodes, number of Mapper and Reducer processes, input file size, and the block size of the simulated distributed file system.
